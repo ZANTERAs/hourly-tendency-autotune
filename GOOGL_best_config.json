@@ -1,0 +1,238 @@
+{
+  "ticker": "GOOGL",
+  "sector": "Communication Services",
+  "sector_etf": "XLC",
+  "selected_at_utc": "2026-05-28T02:12:09.134854+00:00",
+  "best_window": "6-Month",
+  "best_score": 0.5989,
+  "score_weights": {
+    "dir_acc": 0.3,
+    "ic": 0.45,
+    "coverage": 0.25
+  },
+  "confidence_full_at": 300,
+  "quantile_widen_vol": 4.0,
+  "model_config": {
+    "interval": "1h",
+    "bars_per_day": 7,
+    "use_bars": 882,
+    "window": 70,
+    "horizon": 35,
+    "train_ratio": 0.75,
+    "quantiles": [
+      0.05,
+      0.5,
+      0.95
+    ],
+    "band_pct": 89,
+    "hidden_dim": 32,
+    "num_layers": 1,
+    "dropout": 0.3,
+    "batch_size": 32,
+    "epochs": 200,
+    "n_ensemble": 3,
+    "spearman_w": 0.25,
+    "lr": 0.001,
+    "feat_cols": [
+      "Close",
+      "Volume",
+      "EMA_9",
+      "EMA_20",
+      "EMA_spread",
+      "RSI_14",
+      "MACD",
+      "OBV",
+      "BB_width",
+      "BB_pos",
+      "ATR_14",
+      "STOCH_K",
+      "SPY_ret",
+      "SECT_ret"
+    ]
+  },
+  "best_trend": {
+    "direction": "UP",
+    "slope_pct_per_day": 0.1637,
+    "r2": 0.3213,
+    "return_std_pp": 4.1994
+  },
+  "best_metrics": {
+    "rmse": 5.6064,
+    "dir_acc": 0.6462,
+    "ic": 0.4826,
+    "coverage": 0.7949
+  },
+  "best_score_components": {
+    "dir_score": 0.2923,
+    "ic_score": 0.9653,
+    "cov_score": 0.8832,
+    "raw_score": 0.7429,
+    "confidence": 0.8062
+  },
+  "best_forecast": {
+    "p10": -6.7204,
+    "p50": -1.4208,
+    "p90": 5.3597,
+    "current_close": 388.865,
+    "implied_low": 362.7315,
+    "implied_mid": 383.3401,
+    "implied_high": 409.707,
+    "signal": "BEARISH",
+    "horizon_bars": 35,
+    "horizon_desc": "~1 week (5 trading days \u00d7 7 hourly bars)"
+  },
+  "all_windows": [
+    {
+      "label": "3-Month",
+      "bars": 441,
+      "n_val": 84,
+      "quantiles": [
+        0.05,
+        0.5,
+        0.95
+      ],
+      "band_pct": 89,
+      "score": 0.2122,
+      "score_parts": {
+        "dir_score": 0.0,
+        "ic_score": 0.4428,
+        "cov_score": 0.8069,
+        "raw_score": 0.401,
+        "confidence": 0.5292
+      },
+      "trend": {
+        "direction": "UP",
+        "slope_pct_per_day": 0.6437,
+        "r2": 0.7859,
+        "return_std_pp": 5.4399
+      },
+      "metrics": {
+        "rmse": 2.8045,
+        "dir_acc": 0.4643,
+        "ic": 0.2214,
+        "coverage": 0.7262
+      },
+      "forecast": {
+        "p10": -2.5001,
+        "p50": 1.483,
+        "p90": 4.8777,
+        "signal": "BULLISH"
+      },
+      "is_winner": false
+    },
+    {
+      "label": "6-Month",
+      "bars": 882,
+      "n_val": 195,
+      "quantiles": [
+        0.05,
+        0.5,
+        0.95
+      ],
+      "band_pct": 89,
+      "score": 0.5989,
+      "score_parts": {
+        "dir_score": 0.2923,
+        "ic_score": 0.9653,
+        "cov_score": 0.8832,
+        "raw_score": 0.7429,
+        "confidence": 0.8062
+      },
+      "trend": {
+        "direction": "UP",
+        "slope_pct_per_day": 0.1637,
+        "r2": 0.3213,
+        "return_std_pp": 4.1994
+      },
+      "metrics": {
+        "rmse": 5.6064,
+        "dir_acc": 0.6462,
+        "ic": 0.4826,
+        "coverage": 0.7949
+      },
+      "forecast": {
+        "p10": -6.7204,
+        "p50": -1.4208,
+        "p90": 5.3597,
+        "signal": "BEARISH"
+      },
+      "is_winner": true
+    },
+    {
+      "label": "1-Year",
+      "bars": 1764,
+      "n_val": 415,
+      "quantiles": [
+        0.1,
+        0.5,
+        0.9
+      ],
+      "band_pct": 80,
+      "score": 0.5146,
+      "score_parts": {
+        "dir_score": 0.0265,
+        "ic_score": 0.6372,
+        "cov_score": 0.8795,
+        "raw_score": 0.5146,
+        "confidence": 1.0
+      },
+      "trend": {
+        "direction": "UP",
+        "slope_pct_per_day": 0.5147,
+        "r2": 0.8866,
+        "return_std_pp": 3.9631
+      },
+      "metrics": {
+        "rmse": 5.1074,
+        "dir_acc": 0.5133,
+        "ic": 0.3186,
+        "coverage": 0.7036
+      },
+      "forecast": {
+        "p10": -4.0732,
+        "p50": -0.3402,
+        "p90": 3.8398,
+        "signal": "BEARISH"
+      },
+      "is_winner": false
+    },
+    {
+      "label": "2-Year",
+      "bars": 3438,
+      "n_val": 834,
+      "quantiles": [
+        0.05,
+        0.5,
+        0.95
+      ],
+      "band_pct": 89,
+      "score": 0.2895,
+      "score_parts": {
+        "dir_score": 0.1679,
+        "ic_score": 0.0,
+        "cov_score": 0.9566,
+        "raw_score": 0.2895,
+        "confidence": 1.0
+      },
+      "trend": {
+        "direction": "UP",
+        "slope_pct_per_day": 0.2408,
+        "r2": 0.7297,
+        "return_std_pp": 4.2053
+      },
+      "metrics": {
+        "rmse": 4.548,
+        "dir_acc": 0.5839,
+        "ic": -0.2204,
+        "coverage": 0.8609
+      },
+      "forecast": {
+        "p10": -5.6588,
+        "p50": 1.1998,
+        "p90": 7.2513,
+        "signal": "BULLISH"
+      },
+      "is_winner": false
+    }
+  ]
+}
