@@ -5,50 +5,16 @@ impact-to-effort. Items are not commitments — just the backlog.
 
 ---
 
-## 1. Project organization (housekeeping)
+## 1. Project organization (housekeeping)  ✓ done
 
-**Goal:** move from a flat folder where scripts, model weights, configs, and docs
-all sit together, to a structured layout that's easier to navigate.
+Done in commit reorganizing this repo: scripts moved under `src/`, weights
+under `models/` (git-ignored), per-ticker run artifacts under `outputs/`.
+A centralized `src/paths.py` defines `MODELS_DIR` and `OUTPUTS_DIR` so save
+and load destinations stay consistent.
 
-**Proposed structure:**
-
-```
-LSTM_Pytorch/
-├── src/                       # core source
-│   ├── main.py
-│   ├── compare.py
-│   ├── predict.py
-│   └── trend_3mo.py
-├── models/                    # saved .pt ensemble weights (git-ignored)
-│   └── <TICKER>_lstm_e*.pt
-├── outputs/                   # run artifacts
-│   ├── <TICKER>_model_metadata.json
-│   └── <TICKER>_best_config.json
-├── docs/                      # explainer document + generators
-│   ├── generate_pdf.py
-│   ├── generate_docx.js
-│   ├── LSTM_Explained.docx
-│   └── LSTM_Explained.pdf
-├── README.md
-├── FUTURE_IMPROVEMENTS.md
-├── requirements.txt
-├── .gitignore
-└── package.json
-```
-
-**Watch out for:** moving files breaks the hardcoded save/load paths in the code.
-When this is done, update:
-- where `main.py` saves `<TICKER>_lstm_e{seed}.pt` and `<TICKER>_model_metadata.json`
-  → point at `models/` and `outputs/`
-- where `compare.py` writes and `predict.py` reads `<TICKER>_best_config.json`
-  → point at `outputs/`
-- the `.gitignore` `*.pt` rule → `models/*.pt`
-
-A small `paths.py` (or constants at the top of each script) defining
-`MODELS_DIR`, `OUTPUTS_DIR`, `DOCS_DIR` would centralize this so paths never
-drift again.
-
-**Effort:** low. **Impact:** quality-of-life, no model change.
+The daily-bar pipeline now lives in its own companion repo:
+[`ZANTERAs/daily-return-forecaster`](https://github.com/ZANTERAs/daily-return-forecaster).
+That repo could get the same `src/` layout next.
 
 ---
 

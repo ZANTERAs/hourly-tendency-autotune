@@ -20,17 +20,35 @@ scores its own reliability with a confidence-weighted composite.
 Two-step workflow:
 
 ```bash
-python compare.py TICKER     # ~7-9 min: 4-window sweep, picks winner, saves JSON
-python predict.py TICKER     # ~1 min:  loads JSON, retrains winning config, forecasts
+python src/compare.py TICKER     # ~7-9 min: 4-window sweep, picks winner, saves JSON
+python src/predict.py TICKER     # ~1 min:  loads JSON, retrains winning config, forecasts
 ```
 
 `compare.py` trains the same architecture against four different history windows
 (3-month / 6-month / 1-year / 2-year of hourly bars), scores each on
 out-of-sample reliability, and writes the winner's full hyperparameters to
-`<TICKER>_best_config.json`.
+`outputs/<TICKER>_best_config.json`.
 
 `predict.py` reads that file and runs only the winning configuration — same
 forecast, ~6x faster.
+
+## Project layout
+
+```
+hourly-tendency-autotune/
+├── src/                                # source modules
+│   ├── compare.py                      # 4-window auto-tune (entry point)
+│   ├── predict.py                      # fast forecast from saved JSON
+│   ├── trend_3mo.py                    # earlier single-window variant
+│   └── paths.py                        # centralized path constants
+├── models/                             # saved .pt weights (git-ignored)
+├── outputs/                            # per-ticker results
+│   └── <TICKER>_best_config.json       # winning config + all-window comparison
+├── README.md
+├── FUTURE_IMPROVEMENTS.md
+├── requirements.txt
+└── .gitignore
+```
 
 ---
 
@@ -102,17 +120,14 @@ seeds on a CPU in under 10 minutes for the full sweep.
 
 | Script | Purpose | Runtime |
 |--------|---------|---------|
-| `compare.py [TICKER]` | 4-window auto-tune -> `<TICKER>_best_config.json` | ~7-9 min |
-| `predict.py [TICKER]` | Loads saved config, retrains winning window, forecasts | ~1-2 min |
-| `trend_3mo.py`        | Earlier single-window 3-month variant (no auto-tune) | ~30 sec |
-| `main.py`             | Legacy daily-bar pipeline (15y, walk-forward validation, 5-seed ensemble, 17 features incl. earnings + realized vol) | ~10-30 min |
-| `generate_pdf.py` / `generate_docx.js` | Produce the explainer document (`LSTM_Explained.pdf` / `.docx`) | seconds |
+| `src/compare.py [TICKER]` | 4-window auto-tune -> `outputs/<TICKER>_best_config.json` | ~7-9 min |
+| `src/predict.py [TICKER]` | Loads saved config, retrains winning window, forecasts | ~1-2 min |
+| `src/trend_3mo.py`        | Earlier single-window 3-month variant (no auto-tune) | ~30 sec |
 
-`main.py` is the original, more comprehensive pipeline (daily bars, 15 years of
-history, walk-forward validation, earnings flags) — kept around because it
-covers a longer-horizon use case (20-day forward return) that the hourly
-pipeline doesn't. The auto-tune flow is the recommended path for short-horizon
-tendency analysis.
+For the longer-horizon (20-day forward return) daily-bar variant with
+walk-forward validation, earnings flags, and a 5-seed ensemble, see the
+companion repo:
+[ZANTERAs/daily-return-forecaster](https://github.com/ZANTERAs/daily-return-forecaster).
 
 ---
 
@@ -121,8 +136,8 @@ tendency analysis.
 Requires Python 3.10+.
 
 ```bash
-git clone https://github.com/ZANTERAs/LSTM-stock-forecaster.git
-cd LSTM-stock-forecaster
+git clone https://github.com/ZANTERAs/hourly-tendency-autotune.git
+cd hourly-tendency-autotune
 pip install -r requirements.txt
 ```
 
@@ -153,7 +168,7 @@ trend slope/R², and the saved forecast.
 
 Per ticker, `compare.py` produces:
 
-- `<TICKER>_best_config.json` — winning hyperparameters + all-window comparison + forecast
+- `outputs/<TICKER>_best_config.json` — winning hyperparameters + all-window comparison + forecast
 - Interactive Plotly chart with 3 panels: price + per-window trend lines, forecast bars, and score breakdown
 
 `predict.py` produces:
@@ -161,11 +176,10 @@ Per ticker, `compare.py` produces:
 - Same forecast chart (3 panels: price + trend + forecast cone, validation, forecast bar)
 - Console summary
 
-`main.py` produces (legacy):
+`trend_3mo.py` produces:
 
-- `<TICKER>_lstm_e0.pt … e4.pt` — 5 ensemble model weights *(git-ignored)*
-- `<TICKER>_model_metadata.json` — full run snapshot (config, metrics, backtest, forecast)
-- Interactive Plotly chart with the prediction band and the 20-day forecast
+- `models/<TICKER>_trend3mo_e{0,1,2}.pt` — 3 ensemble model weights *(git-ignored)*
+- Interactive Plotly chart
 
 ---
 
