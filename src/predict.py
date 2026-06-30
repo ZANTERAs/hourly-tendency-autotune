@@ -1,10 +1,10 @@
 """
-predict.py — load <TICKER>_best_config.json (from compare.py) and run a
-             fresh forecast using ONLY the winning config (no full sweep).
+predict.py — load outputs/<TICKER>_best_config.json (from compare.py) and run
+             a fresh forecast using ONLY the winning config (no full sweep).
 
 Usage:
-    python predict.py             # loads MSFT_best_config.json
-    python predict.py AAPL        # loads AAPL_best_config.json
+    python src/predict.py             # loads outputs/MSFT_best_config.json
+    python src/predict.py AAPL        # loads outputs/AAPL_best_config.json
 
 This trains a fresh ensemble (~30-60s vs ~7min for compare.py) using the
 exact hyperparameters saved by compare.py's auto-tuner.
@@ -14,6 +14,8 @@ import sys
 import time
 import json
 import yfinance as yf
+
+from paths import OUTPUTS_DIR
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -43,14 +45,14 @@ SECTOR_TO_ETF = {
 
 # ── Load saved config ─────────────────────────────────────────────────────────
 TICKER = sys.argv[1].upper() if len(sys.argv) > 1 else "MSFT"
-CFG_PATH = f"{TICKER}_best_config.json"
+CFG_PATH = OUTPUTS_DIR / f"{TICKER}_best_config.json"
 
 try:
     with open(CFG_PATH, "r", encoding="utf-8") as f:
         SAVED = json.load(f)
 except FileNotFoundError:
-    print(f"\n❌ No config found at '{CFG_PATH}'.")
-    print(f"   Run compare.py first:   python compare.py {TICKER}\n")
+    print(f"\nNo config found at '{CFG_PATH}'.")
+    print(f"   Run compare.py first:   python src/compare.py {TICKER}\n")
     sys.exit(1)
 
 mc = SAVED["model_config"]

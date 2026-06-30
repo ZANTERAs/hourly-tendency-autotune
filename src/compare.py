@@ -1,17 +1,19 @@
 """
 compare.py — auto-tune the LSTM tendency model across 4 time windows
              (3mo / 6mo / 1y / 2y), pick the most reliable one, and
-             save the winning configuration to <TICKER>_best_config.json.
+             save the winning configuration to outputs/<TICKER>_best_config.json.
 
 Usage:
-    python compare.py            # uses TICKER below (MSFT)
-    python compare.py AAPL       # override ticker via CLI
+    python src/compare.py            # uses TICKER below (MSFT)
+    python src/compare.py AAPL       # override ticker via CLI
 """
 
 import sys
 import time
 import json
 import yfinance as yf
+
+from paths import OUTPUTS_DIR
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -533,10 +535,10 @@ def save_best_config(results: list, best: dict) -> str:
         ],
     }
 
-    filepath = f"{TICKER}_best_config.json"
+    filepath = OUTPUTS_DIR / f"{TICKER}_best_config.json"
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, default=str)
-    return filepath
+    return str(filepath)
 
 # ── Comparison plot ───────────────────────────────────────────────────────────
 

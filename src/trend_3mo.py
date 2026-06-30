@@ -17,6 +17,8 @@ from sklearn.preprocessing import MinMaxScaler
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from paths import MODELS_DIR
+
 torch.manual_seed(42)
 np.random.seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -497,7 +499,7 @@ def main():
         bv = train(m, tr_ld, va_ld, label=f"Model {seed + 1}/{N_ENSEMBLE}")
         print(f"    => best_val={bv:.4f}")
         models.append(m)
-        torch.save(m.state_dict(), f"{TICKER}_trend3mo_e{seed}.pt")
+        torch.save(m.state_dict(), MODELS_DIR / f"{TICKER}_trend3mo_e{seed}.pt")
 
     # Validation metrics
     pred_q_val, true_r_val, val_signal_dates = None, None, []
