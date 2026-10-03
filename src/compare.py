@@ -27,17 +27,13 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 torch.manual_seed(42)
 np.random.seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ── Config (shared across all runs) ───────────────────────────────────────────
-TICKER       = "MSFT"
-if len(sys.argv) > 1:
-    TICKER = sys.argv[1].upper()
+TICKER       = "MSFT"        # CLI override is read in main(); autotune() takes it as argument
 
 INTERVAL     = "1h"
 BARS_PER_DAY = 7        # regular-session hourly bars per trading day
@@ -94,7 +90,8 @@ def _get_sector_etf(ticker):
         pass
     return "Unknown", "SPY"
 
-_SECTOR_NAME, SECTOR_ETF = _get_sector_etf(TICKER)
+# Resolved in main() / autotune() (no network at import time).
+_SECTOR_NAME, SECTOR_ETF = "Unknown", "SPY"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -121,7 +118,18 @@ def load_full_data() -> pd.DataFrame:
         raise RuntimeError(f"No data for '{TICKER}' after 3 attempts.")
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = raw.columns.droplevel(1)
-    df = raw[["High", "Low", "Close", "Volume"]].dropna()
+
+    print(f"[3/3] Fetching market context: SPY / {SECTOR_ETF}...", end="", flush=True)
+    spy  = _fetch_close("SPY",      "2y")
+    sect = _fetch_close(SECTOR_ETF, "2y")
+    print(" done")
+    return build_hourly_features(raw, spy, sect)
+
+
+def build_hourly_features(ohlcv_1h: pd.DataFrame, spy_1h: pd.Series,
+                          sect_1h: pd.Series) -> pd.DataFrame:
+    """Pure feature engineering on hourly bars (no network). Same indicators as before."""
+    df = ohlcv_1h[["High", "Low", "Close", "Volume"]].dropna().copy()
     print(f"      {len(df)} bars  [{df.index[0]} – {df.index[-1]}]")
 
     high, low, close, volume = df["High"], df["Low"], df["Close"], df["Volume"]
@@ -142,12 +150,8 @@ def load_full_data() -> pd.DataFrame:
                            high=high, low=low, close=close, window=14, smooth_window=3).stoch()
     print(" done")
 
-    print(f"[3/3] Fetching market context: SPY / {SECTOR_ETF}...", end="", flush=True)
-    spy  = _fetch_close("SPY",      "2y")
-    sect = _fetch_close(SECTOR_ETF, "2y")
-    print(" done")
-    df["SPY_ret"]  = spy.pct_change(HORIZON).mul(100).reindex(df.index)
-    df["SECT_ret"] = sect.pct_change(HORIZON).mul(100).reindex(df.index)
+    df["SPY_ret"]  = spy_1h.pct_change(HORIZON).mul(100).reindex(df.index)
+    df["SECT_ret"] = sect_1h.pct_change(HORIZON).mul(100).reindex(df.index)
 
     return df.dropna()
 
@@ -456,7 +460,7 @@ def run_window(df_full: pd.DataFrame, use_bars: int, label: str) -> dict:
 
 # ── JSON persistence ──────────────────────────────────────────────────────────
 
-def save_best_config(results: list, best: dict) -> str:
+def save_best_config(results: list, best: dict, out_path=None) -> str:
     """Save the winner's full config + a summary of all runs to JSON."""
     payload = {
         "ticker": TICKER,
@@ -535,7 +539,7 @@ def save_best_config(results: list, best: dict) -> str:
         ],
     }
 
-    filepath = OUTPUTS_DIR / f"{TICKER}_best_config.json"
+    filepath = out_path or (OUTPUTS_DIR / f"{TICKER}_best_config.json")
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, default=str)
     return str(filepath)
@@ -545,6 +549,9 @@ def save_best_config(results: list, best: dict) -> str:
 COLORS = ["#4fc3f7", "#ffb74d", "#a5d6a7", "#f48fb1"]   # blue, orange, green, pink
 
 def comparison_plot(results: list, best: dict) -> None:
+    import plotly.graph_objects as go            # lazy: batch runs never plot
+    from plotly.subplots import make_subplots
+
     fig = make_subplots(
         rows=3, cols=1,
         subplot_titles=[
@@ -636,7 +643,36 @@ def comparison_plot(results: list, best: dict) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def autotune(df_full: pd.DataFrame, ticker: str, sector: str, sector_etf: str,
+             out_path=None) -> dict:
+    """
+    Pure 4-window sweep on an already-built hourly feature frame (see
+    build_hourly_features): trains every window, picks the best reliability score
+    and saves <ticker>_best_config.json to `out_path` (default outputs/).
+    Returns {"payload": saved JSON, "results": per-window runs, "best": winner}.
+    """
+    global TICKER, _SECTOR_NAME, SECTOR_ETF
+    TICKER, _SECTOR_NAME, SECTOR_ETF = ticker, sector, sector_etf
+    results = []
+    for cfg in WINDOWS:
+        if cfg["use_bars"] > len(df_full):
+            print(f"\n  [skip] {cfg['label']} needs {cfg['use_bars']} bars, "
+                  f"only {len(df_full)} available")
+        r = run_window(df_full, cfg["use_bars"], cfg["label"])
+        results.append(r)
+
+    best = max(results, key=lambda r: r["score"])
+    path = save_best_config(results, best, out_path)
+    print(f"\n  ✓ Best config saved → {path}")
+    payload = json.loads(open(path, encoding="utf-8").read())
+    return {"payload": payload, "results": results, "best": best}
+
+
 def main():
+    global TICKER, _SECTOR_NAME, SECTOR_ETF
+    if len(sys.argv) > 1:
+        TICKER = sys.argv[1].upper()
+    _SECTOR_NAME, SECTOR_ETF = _get_sector_etf(TICKER)
     print(f"\n{'#'*78}")
     print(f"# 4-Window Auto-Tune  —  {TICKER}  ({_SECTOR_NAME} / {SECTOR_ETF})")
     print(f"# Windows  : {', '.join(w['label'] for w in WINDOWS)}")
@@ -651,16 +687,8 @@ def main():
           f"[{df_full.index[0]} – {df_full.index[-1]}]")
     print(f"  Device       : {device}")
 
-    results = []
-    for cfg in WINDOWS:
-        if cfg["use_bars"] > len(df_full):
-            print(f"\n  [skip] {cfg['label']} needs {cfg['use_bars']} bars, "
-                  f"only {len(df_full)} available")
-        r = run_window(df_full, cfg["use_bars"], cfg["label"])
-        results.append(r)
-
-    # ── Pick winner ────────────────────────────────────────────────────────────
-    best = max(results, key=lambda r: r["score"])
+    out     = autotune(df_full, TICKER, _SECTOR_NAME, SECTOR_ETF)
+    results, best = out["results"], out["best"]
 
     # ── Comparison table ──────────────────────────────────────────────────────
     W = 18
@@ -713,10 +741,6 @@ def main():
         print(f"  ⚠  Best score is low ({best['score']:.2f}) — this stock may be "
               "hard to predict with current settings.")
     print(f"{'★'*78}")
-
-    # ── Save JSON ─────────────────────────────────────────────────────────────
-    path = save_best_config(results, best)
-    print(f"\n  ✓ Best config saved → {path}")
 
     comparison_plot(results, best)
 

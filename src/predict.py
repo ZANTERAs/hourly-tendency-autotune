@@ -29,8 +29,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -44,37 +42,39 @@ SECTOR_TO_ETF = {
 }
 
 # ── Load saved config ─────────────────────────────────────────────────────────
-TICKER = sys.argv[1].upper() if len(sys.argv) > 1 else "MSFT"
-CFG_PATH = OUTPUTS_DIR / f"{TICKER}_best_config.json"
-
-try:
-    with open(CFG_PATH, "r", encoding="utf-8") as f:
-        SAVED = json.load(f)
-except FileNotFoundError:
-    print(f"\nNo config found at '{CFG_PATH}'.")
-    print(f"   Run compare.py first:   python src/compare.py {TICKER}\n")
-    sys.exit(1)
-
-mc = SAVED["model_config"]
-INTERVAL     = mc["interval"]
-BARS_PER_DAY = mc["bars_per_day"]
-USE_BARS     = mc["use_bars"]
-WINDOW       = mc["window"]
-HORIZON      = mc["horizon"]
-TRAIN_RATIO  = mc["train_ratio"]
-QUANTILES    = mc["quantiles"]
-N_Q          = len(QUANTILES)
-HIDDEN_DIM   = mc["hidden_dim"]
-NUM_LAYERS   = mc["num_layers"]
-DROPOUT      = mc["dropout"]
-BATCH_SIZE   = mc["batch_size"]
-EPOCHS       = mc["epochs"]
-N_ENSEMBLE   = mc["n_ensemble"]
-SPEARMAN_W   = mc["spearman_w"]
-LR           = mc["lr"]
-FEAT_COLS    = mc["feat_cols"]
+# The CLI reads outputs/<TICKER>_best_config.json in main(); predict_from_config()
+# receives the config dict. Either way _apply_config() sets the globals below.
+TICKER   = "MSFT"
+CFG_PATH = None
+SAVED    = None
 LR_PATIENCE  = 10
 ES_PATIENCE  = 30
+
+
+def _apply_config(saved: dict) -> None:
+    """Set the module-level hyperparameters from a saved best_config.json dict."""
+    global SAVED, INTERVAL, BARS_PER_DAY, USE_BARS, WINDOW, HORIZON, TRAIN_RATIO
+    global QUANTILES, N_Q, HIDDEN_DIM, NUM_LAYERS, DROPOUT, BATCH_SIZE, EPOCHS
+    global N_ENSEMBLE, SPEARMAN_W, LR, FEAT_COLS
+    SAVED = saved
+    mc = saved["model_config"]
+    INTERVAL     = mc["interval"]
+    BARS_PER_DAY = mc["bars_per_day"]
+    USE_BARS     = mc["use_bars"]
+    WINDOW       = mc["window"]
+    HORIZON      = mc["horizon"]
+    TRAIN_RATIO  = mc["train_ratio"]
+    QUANTILES    = mc["quantiles"]
+    N_Q          = len(QUANTILES)
+    HIDDEN_DIM   = mc["hidden_dim"]
+    NUM_LAYERS   = mc["num_layers"]
+    DROPOUT      = mc["dropout"]
+    BATCH_SIZE   = mc["batch_size"]
+    EPOCHS       = mc["epochs"]
+    N_ENSEMBLE   = mc["n_ensemble"]
+    SPEARMAN_W   = mc["spearman_w"]
+    LR           = mc["lr"]
+    FEAT_COLS    = mc["feat_cols"]
 
 # ── Sector lookup ─────────────────────────────────────────────────────────────
 
@@ -88,7 +88,8 @@ def _get_sector_etf(ticker):
         pass
     return "Unknown", "SPY"
 
-_SECTOR_NAME, SECTOR_ETF = _get_sector_etf(TICKER)
+# Resolved in main() (no network at import time).
+_SECTOR_NAME, SECTOR_ETF = "Unknown", "SPY"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -276,6 +277,8 @@ def _trend_slope(close_arr):
 
 def plot(df, true_r_val, pred_q_val, val_dates,
          fc_p10, fc_p50, fc_p90, current_close):
+    import plotly.graph_objects as go            # lazy: batch runs never plot
+    from plotly.subplots import make_subplots
     slope_pct, r2, slope, intercept = _trend_slope(df["Close"].values)
     trend_line = slope * np.arange(len(df)) + intercept
     trend_dir  = "UP" if slope_pct > 0 else "DOWN"
@@ -370,21 +373,8 @@ def plot(df, true_r_val, pred_q_val, val_dates,
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
-    band_pct = int((QUANTILES[-1] - QUANTILES[0]) * 100)
-    q_lo = f"P{int(QUANTILES[0]*100):02d}"
-    q_hi = f"P{int(QUANTILES[-1]*100):02d}"
-
-    print(f"\n{'#'*78}")
-    print(f"# Predict (saved config)  —  {TICKER}  ({_SECTOR_NAME} / {SECTOR_ETF})")
-    print(f"# Source   : {CFG_PATH}")
-    print(f"# Window   : {SAVED['best_window']}  (use_bars={USE_BARS})")
-    print(f"# Quantile : {q_lo}/P50/{q_hi}  ({band_pct}% band)  "
-          f"(σ_train was {SAVED['best_trend'].get('return_std_pp', 0):.2f}pp)")
-    print(f"# Saved score (last sweep): {SAVED['best_score']:.3f}")
-    print(f"{'#'*78}")
-
-    df        = load_data()
+def _train_and_forecast(df: pd.DataFrame) -> dict:
+    """Train the saved config's ensemble on `df` and forecast (body of the original main)."""
     values    = df[FEAT_COLS].values
     close_raw = df["Close"].values
     n, n_feat = values.shape
@@ -416,7 +406,7 @@ def main():
     elapsed = time.time() - t0
 
     # Validation eval
-    pred_q_val, true_r_val, val_dates = None, None, []
+    pred_q_val, true_r_val, val_dates, met = None, None, [], {}
     if len(X_va) >= 2:
         X_va_t, y_va_t = to_tensors(X_va, y_va)
         pred_q_val = predict_ensemble(models, X_va_t)
@@ -432,6 +422,59 @@ def main():
     last_t = torch.tensor(scaled[-WINDOW:], dtype=torch.float32).unsqueeze(0)
     fc_q   = predict_ensemble(models, last_t).squeeze(0)
     fc_p10, fc_p50, fc_p90 = float(fc_q[0]), float(fc_q[1]), float(fc_q[2])
+    return dict(fc_p10=fc_p10, fc_p50=fc_p50, fc_p90=fc_p90, current=current_close,
+                met=met, quantiles=list(QUANTILES), elapsed=elapsed, close_raw=close_raw,
+                _plot=(df, true_r_val, pred_q_val, val_dates, fc_p10, fc_p50, fc_p90, current_close))
+
+
+def predict_from_config(df_full: pd.DataFrame, saved: dict) -> dict:
+    """
+    Pure forecast from a saved best_config dict on an already-built hourly feature
+    frame (same features as compare.build_hourly_features). Uses the last USE_BARS
+    bars, trains the saved config's ensemble and returns the forecast.
+    """
+    global TICKER
+    _apply_config(saved)
+    TICKER = saved["ticker"]
+    df = df_full.dropna()
+    if len(df) > USE_BARS:
+        df = df.iloc[-USE_BARS:]
+    out = _train_and_forecast(df)
+    out.pop("_plot")
+    out.pop("close_raw")
+    return out
+
+
+def main():
+    global TICKER, CFG_PATH, _SECTOR_NAME, SECTOR_ETF
+    TICKER   = sys.argv[1].upper() if len(sys.argv) > 1 else "MSFT"
+    CFG_PATH = OUTPUTS_DIR / f"{TICKER}_best_config.json"
+    try:
+        with open(CFG_PATH, "r", encoding="utf-8") as f:
+            _apply_config(json.load(f))
+    except FileNotFoundError:
+        print(f"\nNo config found at '{CFG_PATH}'.")
+        print(f"   Run compare.py first:   python src/compare.py {TICKER}\n")
+        sys.exit(1)
+    _SECTOR_NAME, SECTOR_ETF = _get_sector_etf(TICKER)
+
+    band_pct = int((QUANTILES[-1] - QUANTILES[0]) * 100)
+    q_lo = f"P{int(QUANTILES[0]*100):02d}"
+    q_hi = f"P{int(QUANTILES[-1]*100):02d}"
+
+    print(f"\n{'#'*78}")
+    print(f"# Predict (saved config)  —  {TICKER}  ({_SECTOR_NAME} / {SECTOR_ETF})")
+    print(f"# Source   : {CFG_PATH}")
+    print(f"# Window   : {SAVED['best_window']}  (use_bars={USE_BARS})")
+    print(f"# Quantile : {q_lo}/P50/{q_hi}  ({band_pct}% band)  "
+          f"(σ_train was {SAVED['best_trend'].get('return_std_pp', 0):.2f}pp)")
+    print(f"# Saved score (last sweep): {SAVED['best_score']:.3f}")
+    print(f"{'#'*78}")
+
+    df  = load_data()
+    out = _train_and_forecast(df)
+    fc_p10, fc_p50, fc_p90 = out["fc_p10"], out["fc_p50"], out["fc_p90"]
+    current_close, elapsed, close_raw = out["current"], out["elapsed"], out["close_raw"]
     t_p10 = current_close * (1 + fc_p10/100)
     t_p50 = current_close * (1 + fc_p50/100)
     t_p90 = current_close * (1 + fc_p90/100)
@@ -449,8 +492,7 @@ def main():
     print(f"  Signal      : {signal}")
     print(f"{'='*78}")
 
-    plot(df, true_r_val, pred_q_val, val_dates,
-         fc_p10, fc_p50, fc_p90, current_close)
+    plot(*out["_plot"])
 
 
 if __name__ == "__main__":
